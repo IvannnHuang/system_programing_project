@@ -53,7 +53,8 @@ int runMain(char **argv)
     if constexpr (std::is_same_v<T, float>) {
         qemb = query_obj["embedding"].get<float>();
     } else {
-        for (size_t i = 0; i < Embedding_T<T>::Dim; ++i) {
+        qemb.resize(Embedding_T<T>::Dim());
+        for (size_t i = 0; i < Embedding_T<T>::Dim(); ++i) {
             qemb[i] = query_obj["embedding"][i].get<float>();
         }
     }
@@ -67,7 +68,8 @@ int runMain(char **argv)
         if constexpr (std::is_same_v<T, float>) {
             emb = elem["embedding"].get<float>();
         } else {
-            for (size_t i = 0; i < Embedding_T<T>::Dim; ++i) {
+            emb.resize(Embedding_T<T>::Dim());
+            for (size_t i = 0; i < Embedding_T<T>::Dim(); ++i) {
                 emb[i] = elem["embedding"][i].get<float>();
             }
         }
@@ -155,21 +157,25 @@ int runMain(char **argv)
 int main(int argc, char **argv)
 {
     if (argc != 5) {
-        std::cerr << "Usage: " << argv[0] << " <mode> <query.json> <data.json> <K>\n";
+        std::cerr << "Usage: " << argv[0] << " <dim> <query.json> <data.json> <K>\n";
         return 1;
     }
 
     // mode 0: scalar float, mode 1: fixed-size array<float,20>
-    int mode = std::stoi(argv[1]);
+    size_t dim = std::stoi(argv[1]);
+    assert (dim >= 1);
+    runtime_dim() = dim;
 
     char* new_argv[3];
     new_argv[0] = argv[2];   // pass query JSON‐filename as argv[0]
     new_argv[1] = argv[3];   // pass data JSON‐filename as argv[1]
     new_argv[2] = argv[4];   // pass K as argv[2]
 
-    if (mode == 0) {
+
+
+    if (dim == 1) {
         return runMain<float>(new_argv);
     } else {
-        return runMain<std::array<float,384>>(new_argv);
+         return runMain<std::vector<float>>(new_argv);
     }
 }

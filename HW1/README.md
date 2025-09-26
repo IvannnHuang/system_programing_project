@@ -163,7 +163,7 @@ A k-d tree organizes $k$-dimensional points using recursive partitioning. At eac
 
 ## Build k-d Tree
 
-A **k-d tree** (short for *k*-dimensional tree) is a generalization of a binary search tree that organizes points in $d$-dimensional space. Like the 1D case, the idea is to recursively partition the space, but instead of splitting the number line, each node splits the space with a **hyperplane** (e.g., a vertical or horizontal line in 2D). This recursively divides the space into regions, like slicing a cake repeatedly along different planes.
+A **k-d tree** (short for *k*-dimensional tree) is a generalization of a binary search tree that organizes points in $k$-dimensional space. Like the 1D case, the idea is to recursively partition the space, but instead of splitting the number line, each node splits the space with a **hyperplane** (e.g., a vertical or horizontal line in 2D). This recursively divides the space into regions, like slicing a cake repeatedly along different planes.
 
 ### Key Differences from 1D
 
@@ -203,7 +203,7 @@ This yields the following tree:
                       /      \
             (2, 7)                 (17, 15)       ← level 1, split on y
            /     \                /       \
-      (3, 6)   (6, 12)       (10, 19)   (13, 15)  ← level 2, split on x
+      (3, 6)   (6, 12)       (13, 15)   (10, 19)  ← level 2, split on x
 
 ---
 
@@ -403,31 +403,40 @@ In this homework, we use the BGE-small-en-v1.5 model from Hugging Face to embed 
 ## Dataset: MS MARCO (Passage Ranking)
 We use the MS MARCO passage ranking dataset (Li et al., arXiv:1611.09268), a benchmark commonly used in semantic search and retrieval tasks. You can learn more about it from the [MS MARCO website](https://microsoft.github.io/msmarco/).
 
-We’ve processed 9650 queries and 79,176 passages from the dataset by embedding each one using the BGE encoder. 
+We’ve processed 9650 queries and 79,176 passages from the dataset by embedding each one using the BGE encoder. They are split into two smaller files `passages1.json` and `passages2.json`.
+
+To download the data:
+
+```
+chmod +x download.sh
+./download.sh
+```
 
 The queries are stored in (the first one is served as the query point in the program):
 
 ```
-./data/queries_emd.json
+./data/queries_emb.json
 ```
 
-The passages are stored in:
+An example of one of the passage files is stored in:
 
 ```
-./data/passages_emd.json
+./data/passages1.json
 ```
 
 To test your program with this dataset, run:
 ```
-./knn 1 ./data/queries_emd.json ./data/passages_emd.json 2
+./main 384 ./data/queries_emb.json ./data/passages1.json 2
 ```
 
 This command runs KNN search in 384D to find the 2 nearest neighbors to the query point.
 
+We have also uploaded several simple test cases (e.g., `3d-1.json`) in `part2/data` that you can use for debugging.
+
 
 
 ## Starter Code
-You will work with the following three files in the `part2` directory:
+You will work with the following two files in the `part2` directory:
 - `main.cpp`: This is the entry point of the program, similar to the one used in part 1.
 
 - `knn.hpp`: This header file defines the types and function as well as the implementation used for the KD-tree and KNN search. In Part 2, we use a template class for `T`, which can represent either a `float` (for 1-dimensional scalar data) or an array of floats (for k-dimensional data). This design allows the same code to handle both 1D and multi-dimensional cases in a generic way. In C++, template implementations must be placed in header files (`.hpp`) because the compiler needs to see the full implementation when instantiating templates. Therefore, for this project, all implementation is provided in the `.hpp` files, and `.cpp` source files are not used in Part 2.
@@ -443,12 +452,12 @@ make all
 To run the program:
 
 ```bash
-./main <query_json> <passage_json> <K>
+./main <dim> <query_json> <passage_json> <K>
 ```
 
-- `<mode>`:  
-  - Use `0` for scalar input (`float`)  
-  - Use any other value for vector input (`std::array<float, N>`)
+- `<dim>`:  
+  - The dimensionality of the embedding.
+  - The embeddings generated using the described process have dim = 384. However, you may also create toy embeddings with smaller dimensions for debugging purposes.
 
 - `<query_json>`: Path to the JSON file containing the query point.
 
@@ -463,12 +472,12 @@ The `Embedding_T<T>` structure uses C++ template specialization to allow the K-D
 
 - For `float`: 
   - Represents a scalar (1-dimensional) embedding.
-  - `Dim = 1`.
+  - The `Dim` function always return 1.
   - The `distance` function computes the absolute difference: `|a - b|`.
 
-- For `std::array<float, N>`:
+- For `std::vector<float>`:
   - Represents a fixed-size N-dimensional vector embedding.
-  - `Dim = N`.
+  - The `Dim` function returns N, which corresponds to the dim value of the argument you provided.
   - The `distance` function computes the Euclidean distance between two vectors.
 
 ### `Node<T>`
@@ -493,16 +502,23 @@ This is a type alias for a max-heap priority queue of PQItem elements. It uses `
 You will reuse the same core logic from Part 1 (building the tree, and running KNN search), but extend the implmentation of function `buildKD` and `knnSearch` to operate over k-d embedding, either vectors in $\mathbb{R}^d$ and scalars.
 
 
-### Grading (TBD)
-Unlike Part 1, we will grade the correctness of your entire pipeline as a whole—not individual subtasks.
+### Grading
+You will be tested on four different values of k: 1, 3, 5, and 10.  There are four test cases each in k = 1, 3, and 5. The last test case of these are based on the MS MARCO passage datasets; the other datasets are located in the `./data/` directory. There are two test cases in k = 10, both based on the MS MARCO passage datasets.
 
-To evaluate your results, we use the printNeighbour() function to print out the IDs and distances of the nearest neighbors your program finds. You will be tested on four different values of k: 1, 3, 5, and 10.
+We will run your program to verify the correctness of the built tree and the output of the search. Each value of `k` total to be worth 5 points. The `buildKD` on the MS MARCO dataset 1 and 2 across all `k` are combined into the `buildKD, MS MARCO 1` and `buildKD, MS MARCO 2` tests.
 
-Each of the four test cases is worth 5 points:
-
-- Correct output for k=1 → 5 points
-- Correct output for k=3 → 5 points
-- etc.
+- Correct outputs for k=1 → 5 points
+   - 1.25 points each test case (4 test cases)
+   - Each test case split into `buildKD` and `knnSearch`
+- Correct outputs for k=3 → 5 points
+   - 1.25 points each test case (4 test cases)
+   - Each test case split into `buildKD` and `knnSearch`
+- Correct outputs for k=5 → 5 points
+   - 1.25 points each test case (4 test cases)
+   - Each test case split into `buildKD` and `knnSearch`
+- Correct outputs for k=10 → 5 points
+   - 2.5 points each test case (2 test cases)
+   - Each test case split into `buildKD` and `knnSearch`
 
 
 
@@ -519,7 +535,7 @@ In this part, your goal is to reproduce the KNN functionality you implemented in
 
 ## ALGLIB Data Structures and APIs for KNN Search
 
- ALGLIB provides its own array wrappers and search routines for working with numerical data. This section explains the core data types and functions you'll need.
+ ALGLIB provides its own array wrappers and search routines for working with numerical data. This section explains the core data types and functions you'll need. You can refer to the [ALGLIB documentation](https://www.alglib.net/translator/man/manual.cpp.html) for more details.
 
 ### Core Array Types
 
@@ -551,8 +567,7 @@ ALGLIB provides special array types that wrap native C++ arrays. These types are
       4.0, 5.0, 6.0    // Point 1
   };
   alglib::real_2d_array allPoints;
-  points.setcontent(2, 3, raw_data);
-  // Represents: [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+  points.setcontent(2, 3, raw_data); // 2 rows, 3 columns
   ```
 f
 - `integer_1d_array`
@@ -564,8 +579,8 @@ f
   ```
   alglib::integer_1d_array tags;
   tags.setlength(2);
-  tags[0] = 101;  // ID for point 0
-  tags[1] = 102;  // ID for point 1
+  tags[0] = 0;  // ID for point 0
+  tags[1] = 1;  // ID for point 1
   ```
 
 ### ALGLIB key functions
@@ -607,7 +622,7 @@ Here are the key functions you'll use:
 
 ### kdtreequeryresultsdistances
 
-This function retrieves the distances from the query point to each of the nearest neighbors found by the most recent query (e.g., after calling `kdtreequeryaknn`). The distances are returned in the same order as the tags/IDs from `kdtreequeryresultstags`.
+This function retrieves the distances from the query point to each of the nearest neighbors found by the most recent query (e.g., after calling `kdtreequeryaknn`).
 
 - Arguments:
   - `tree`: the k-d tree object after a query
@@ -660,7 +675,6 @@ This function retrieves the integer tags (IDs) of the nearest neighbors found by
   }
   ```
 
-- 
 
 
 ## Starter code
@@ -672,13 +686,13 @@ To **compile** the program:
 
 ```bash
 cd part3
-Make all
+make all
 ```
 
 To run the program:
 
 ```bash
-./knn_alglib <query_json> <passage_json> <K> <eps>
+./main <query_json> <passage_json> <K> <eps>
 ```
 
 - `<query_json>`: Path to the JSON file containing the query point.
@@ -690,19 +704,30 @@ To run the program:
 - `<epsilon>`: The approximation factor used in.
 
 
+You can reuse the data files from Part 2 as your query or passage inputs. For example:
+```
+cp -r ../part2/data ./data/
+./main ./data/3d-1.json ./data/3d-2.json 1 0
+./main ./data/queries_emb.json ./data/passages1.json 1 0
+```
+
+
+
+
+
 ## Your job
 
 ### A. Implement ANN search using ALGLIB
 
-You need to complete the knn_alglib.cpp file by:
+You need to complete the main.cpp file by:
 
 1. Loading and Parsing the Input
 
     You should read the input JSON files for the query point and dataset (as in Part 1 and 2). Specifically, you will:
 
-    - Load the "embedding" field from the query into a real_1d_array
-    - Flatten all embeddings from the dataset into a double[] array and wrap it in a real_2d_array using setcontent(...)
-    - Store all IDs (the 'idx' filed of each data point) into an integer_1d_array named as something like *tags*
+    - Load the "embedding" field from the query into a real_1d_array (e.g., named query).
+    - Flatten all embeddings from the dataset into a double[] array and wrap it in a real_2d_array (e.g., named allPoints).
+    - Store all IDs (the "idx" field of each data point) in an integer_1d_array (e.g., named tags).
 
 
 2. Building the k-d Tree
@@ -728,7 +753,7 @@ Your should answer the following question in the report:
   - You should compare the performance of:
     - Your own k-d tree KNN implementation from Part 2
     - The ALGLIB-based implementation from Part 3
-  - Run both implementations in exact mode (i.e., set <epsilon> = 0) and search for the 10 nearest neighbors (K = 10).
+  - Run both implementations in exact mode (i.e., set `epsilon` = 0) and search for the 10 nearest neighbors (K = 10).
   - For each method, report the following timing breakdown:
     - Total elapsed time
     - Time to process and parse the input
@@ -744,30 +769,27 @@ Your should answer the following question in the report:
     - When ε = 0, the search is exact and will always return the true nearest neighbors.
     - When ε > 0, the search becomes faster but may return slightly less accurate results.
   - You should:
-    - Eexperiment with different values of ε, such as: 0 (exact), 1, 2, 5, 10, 20
-    - For each value, measure and report the time taken for the KNN search only (exclude data loading and tree construction).
+    - Use ../part2/data/queries_emb.json as `query_json`, and either ../part2/data/passages1.json or ../part2/data/passages2.json as `passage_json`.
+    - Eexperiment with different values of ε. For each value, measure and report the time taken for the KNN search only (exclude data loading and tree construction).
+    - Report the accuracy of your approximate KNN (ANN) search. When we compare approximate KNN (ANN) with exact KNN, we measure accuracy by checking how many neighbors overlap between the two results (ignoring order). Example: If the ANN search returns 10 neighbors, and 7 of them also appear in the exact KNN results, then the accuracy is 70%. The order doesn’t matter. If a point is the 2nd neighbor in the exact search but shows up as the 3rd in the ANN search, we still count it as correct.
     - Report your findings in the following table format:
 
-        | ε (epsilon) | Search Time (ms) | Accuracy (out of 10) |
-        | ----------- | ---------------- | -------------------- |
-        | 0.0         | xx               | yy                   |
-        | 0.5         | xx               | yy                   |
-        | 1           | xx               | yy                   |
-        | 2           | xx               | yy                   |
-        | 5           | xx               | yy                   |
-        | 10          | xx               | yy                   |
+      | k  | ε (epsilon) | Search Time (ms) | Accuracy |
+      | -  | ----------- | ---------------- | -------------------- |
+      | 1  | 0.0         | xx               | yy                   |
+      | 1  | 5           | xx               | yy                   |
+      | 1  | ...         | xx               | yy                   |
+      | 5  | 0.0         | xx               | yy                   |
+      | 5  | 5           | xx               | yy                   |
+      | 5  | ...         | xx               | yy                   |
+      | ...| ...         | xx               | yy                   |
 
 ## Grading
 
 Your work for Part 3 will be graded based on the correctness of your implementation and the quality of your written report. The total for this part is 20 points.
 
 - Part 3.A — Implementation (15 points)
-  - We will grade the correctness of your implementation (same as Part 2). To evaluate your results, we use the printNeighbour() function to print out the IDs and distances of the nearest neighbors your program finds. You will be tested on four different values of k: 1, 2, 3, 5, and 10.
-
-  - Each of the five test cases is worth 3 points:
-    - Correct output for k=1 → 3 points
-    - Correct output for k=5 → 3 points
-    - etc.
+  - Please submit your main.cpp file. The correctness of your implementation will be checked manually.
 
 - Part 3.B — Report (15 points)
 
@@ -795,5 +817,5 @@ Submit and upload the following files to the hw1 part 2 gradescope autograder:
 
 Submit and upload the following files to the hw1 part 3 gradescope autograder:
 
-- `knn_alglib.cpp`
-- `report.pdf` (this will be manually reviewed)
+- `main.cpp`
+- `report.pdf`

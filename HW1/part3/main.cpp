@@ -77,6 +77,112 @@ int main(int argc, char* argv[]) {
             - Get the distance between each found neighbour and the query embedding using alglib::kdtreequeryresultsdists
         */
         
+        // Shapes & validation
+        const size_t N = passages_json.size();
+        if (N == 0) {
+            std::cerr << "Passages array is empty\n";
+            return 1;
+        }
+        for (const auto& elem : passages_json) {
+            if (!elem.contains("embedding") || !elem["embedding"].is_array()) {
+                std::cerr << "Each passage must contain an 'embedding' array\n";
+                return 1;
+            }
+            if (elem["embedding"].size() != D) {
+                std::cerr << "Dimension mismatch: passage embedding dim != query dim\n";
+                return 1;
+            }
+            if (!elem.contains("id")) {
+                std::cerr << "Each passage must contain an integer 'id'\n";
+                return 1;
+            }
+        }
+
+        // Build ALGLIB inputs (row-major N x D and tags)
+        std::vector<double> data;
+        data.resize(N * D);
+        alglib::integer_1d_array tags;
+        tags.setlength((alglib::ae_int_t)N);
+
+        for (size_t i = 0; i < N; ++i) {
+            const auto& emb = passages_json[i]["embedding"];
+            for (size_t d = 0; d < D; ++d) {
+                data[i * D + d] = emb[d].get<double>();
+            }
+            tags[(alglib::ae_int_t)i] = passages_json[i]["id"].get<int>();
+        }
+        // Wrap into real_2d_array
+        alglib::real_2d_array allPoints;
+        allPoints.setcontent((alglib::ae_int_t)N, (alglib::ae_int_t)D, data.data());
+
+        // Build KD-tree
+        auto buildtree_start = std::chrono::high_resolution_clock::now();
+        alglib::kdtree tree;
+        alglib::kdtreebuildtagged(allPoints, tags, (alglib::ae_int_t)N, (alglib::ae_int_t)D,
+                                /*NY=*/0, /*normtype=*/2, tree);
+        auto buildtree_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> buildtree_duration = buildtree_end - buildtree_start;
+
+        // Query
+        if (k <= 0) {
+            std::cerr << "K must be positive\n";
+            return 1;
+        }
+        int effective_k = k;
+        if ((size_t)effective_k > N) {
+            effective_k = static_cast<int>(N);
+        }
+        auto query_start = std::chrono::high_resolution_clock::now();
+        alglib::ae_int_t count = alglib::kdtreequeryaknn(tree, query, (alglib::ae_int_t)effective_k, eps);
+
+        // Retrieve ascending sorted results
+        alglib::real_1d_array dist;
+        dist.setlength(count);
+        alglib::kdtreequeryresultsdistances(tree, dist);
+
+        alglib::integer_1d_array nn_ids;
+        nn_ids.setlength(count);
+        alglib::kdtreequeryresultstags(tree, nn_ids);
+        auto query_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
+
+        // Print output
+        auto program_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> program_duration = program_end - program_start;
+        std::chrono::duration<double, std::milli> processing_duration = query_end - processing_start; // coarse: everything after args
+
+        // Query header
+        std::cout << "query:\n";
+        if (query_obj.contains("text")) {
+            std::cout << "  text:    " << query_obj["text"] << "\n\n";
+        } else {
+            std::cout << "  text:    " << "(no text)\n\n";
+        }
+
+        // Neighbors
+        for (int i = 0; i < count; ++i) {
+            int id = nn_ids[i];
+            double dval = dist[i];
+
+            std::cout << "Neighbor " << (i + 1) << ":\n";
+            std::cout << "  id:      " << id << ", dist = " << dval << "\n";
+
+            auto it = dict.find(id);
+            if (it != dict.end() && it->second.contains("text")) {
+                std::cout << "  text:    " << it->second["text"] << "\n\n";
+            } else {
+                std::cout << "  text:    " << "(no text)\n\n";
+            }
+        }
+
+        // Performance section
+        std::cout << "#### Performance Metrics ####\n";
+        std::cout << "Elapsed time: " << program_duration.count() << " ms\n";
+        std::cout << "Processing time: " << processing_duration.count() << " ms\n";
+        std::cout << "KD-tree build time: " << buildtree_duration.count() << " ms\n";
+        std::cout << "K-NN query time: " << query_duration.count() << " ms\n";
+
+        
     }
     catch(alglib::ap_error &e) {
         std::cerr << "ALGLIB error: " << e.msg << std::endl;
